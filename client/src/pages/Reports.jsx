@@ -25,6 +25,238 @@ const downloadExcel = async (endpoint, filename) => {
   } catch { alert('Error al exportar Excel') }
 }
 
+const GREEN_RGB = [26, 92, 42]
+const LIGHT_RGB = [240, 247, 241]
+
+const downloadSalesPDF = async (data, dateFrom, dateTo) => {
+  if (!data) return
+  const { jsPDF } = await import('jspdf')
+  const { default: autoTable } = await import('jspdf-autotable')
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const W = doc.internal.pageSize.getWidth()
+
+  const addHeader = (title) => {
+    doc.setFillColor(...GREEN_RGB)
+    doc.rect(0, 0, W, 28, 'F')
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(18); doc.setFont('helvetica', 'bold')
+    doc.text('AgroMaq de México', 14, 11)
+    doc.setFontSize(10); doc.setFont('helvetica', 'normal')
+    doc.setTextColor(200, 230, 200)
+    doc.text(title, 14, 20)
+    doc.setTextColor(200, 230, 200)
+    doc.text(`${dateFrom} — ${dateTo}`, W - 14, 20, { align: 'right' })
+  }
+
+  const addFooter = (pageNum, totalPages) => {
+    doc.setFillColor(...GREEN_RGB)
+    doc.rect(0, doc.internal.pageSize.getHeight() - 12, W, 12, 'F')
+    doc.setTextColor(200, 230, 200); doc.setFontSize(7); doc.setFont('helvetica', 'normal')
+    doc.text(`Generado: ${new Date().toLocaleDateString('es-MX')}  ·  AgroMaq de México`, 14, doc.internal.pageSize.getHeight() - 4)
+    doc.text(`Página ${pageNum} de ${totalPages}`, W - 14, doc.internal.pageSize.getHeight() - 4, { align: 'right' })
+  }
+
+  // Page 1: KPIs + channels + categories
+  addHeader('Reporte de Ventas')
+
+  // KPI boxes
+  const kpis = [
+    { label: 'Ingresos Totales', value: fmt(data.totalRevenue) },
+    { label: 'Pedidos', value: String(data.totalOrders || 0) },
+    { label: 'Ticket Promedio', value: data.totalOrders > 0 ? fmt(data.totalRevenue / data.totalOrders) : '$0' },
+    { label: 'Canales Activos', value: String(data.byChannel?.length || 0) },
+  ]
+  const boxW = (W - 28 - 9) / 4
+  kpis.forEach((k, i) => {
+    const x = 14 + i * (boxW + 3)
+    doc.setFillColor(...LIGHT_RGB)
+    doc.roundedRect(x, 33, boxW, 22, 3, 3, 'F')
+    doc.setDrawColor(...GREEN_RGB); doc.setLineWidth(0.5)
+    doc.roundedRect(x, 33, boxW, 22, 3, 3, 'S')
+    doc.setTextColor(120, 120, 120); doc.setFontSize(7); doc.setFont('helvetica', 'normal')
+    doc.text(k.label, x + boxW / 2, 39, { align: 'center' })
+    doc.setTextColor(...GREEN_RGB); doc.setFontSize(13); doc.setFont('helvetica', 'bold')
+    doc.text(k.value, x + boxW / 2, 50, { align: 'center' })
+  })
+
+  // Sales by channel table
+  if (data.byChannel?.length > 0) {
+    doc.setTextColor(...GREEN_RGB); doc.setFontSize(11); doc.setFont('helvetica', 'bold')
+    doc.text('Ventas por Canal', 14, 66)
+    autoTable(doc, {
+      startY: 69,
+      head: [['Canal', 'Pedidos', 'Total']],
+      body: data.byChannel.map(c => [CHANNEL_LABELS[c.channel] || c.channel, c.count, fmt(c.total)]),
+      styles: { fontSize: 9, cellPadding: 3 },
+      headStyles: { fillColor: GREEN_RGB, textColor: [255,255,255], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: LIGHT_RGB },
+      columnStyles: { 0: { cellWidth: 60 }, 1: { cellWidth: 30, halign: 'center' }, 2: { halign: 'right' } },
+      margin: { left: 14, right: 14 },
+    })
+  }
+
+  // Sales by category table
+  if (data.byCategory?.length > 0) {
+    const y = doc.lastAutoTable?.finalY + 8 || 120
+    doc.setTextColor(...GREEN_RGB); doc.setFontSize(11); doc.setFont('helvetica', 'bold')
+    doc.text('Ventas por Categoría', 14, y)
+    autoTable(doc, {
+      startY: y + 3,
+      head: [['Categoría', 'Unidades', 'Total']],
+      body: data.byCategory.slice(0, 10).map(c => [c.category, c.qty, fmt(c.total)]),
+      styles: { fontSize: 9, cellPadding: 3 },
+      headStyles: { fillColor: GREEN_RGB, textColor: [255,255,255], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: LIGHT_RGB },
+      columnStyles: { 1: { halign: 'center' }, 2: { halign: 'right' } },
+      margin: { left: 14, right: 14 },
+    })
+  }
+
+  addFooter(1, 2)
+
+  // Page 2: Top products + orders
+  doc.addPage()
+  addHeader('Reporte de Ventas — Detalle')
+
+  if (data.byProduct?.length > 0) {
+    doc.setTextColor(...GREEN_RGB); doc.setFontSize(11); doc.setFont('helvetica', 'bold')
+    doc.text('Top Productos Más Vendidos', 14, 36)
+    autoTable(doc, {
+      startY: 39,
+      head: [['#', 'Producto', 'SKU', 'Cant.', 'Total']],
+      body: data.byProduct.slice(0, 20).map((p, i) => [i + 1, p.product, p.sku || '-', p.qty, fmt(p.total)]),
+      styles: { fontSize: 8.5, cellPadding: 3 },
+      headStyles: { fillColor: GREEN_RGB, textColor: [255,255,255], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: LIGHT_RGB },
+      columnStyles: { 0: { cellWidth: 10, halign: 'center' }, 2: { cellWidth: 30 }, 3: { cellWidth: 18, halign: 'center' }, 4: { halign: 'right' } },
+      margin: { left: 14, right: 14 },
+    })
+  }
+
+  if (data.orders?.length > 0) {
+    const y2 = doc.lastAutoTable?.finalY + 8 || 80
+    doc.setTextColor(...GREEN_RGB); doc.setFontSize(11); doc.setFont('helvetica', 'bold')
+    doc.text(`Pedidos del Período (${Math.min(data.orders.length, 30)} de ${data.orders.length})`, 14, y2)
+    autoTable(doc, {
+      startY: y2 + 3,
+      head: [['Folio', 'Fecha', 'Cliente', 'Canal', 'Total', 'Estado']],
+      body: data.orders.slice(0, 30).map(o => [
+        o.folio,
+        new Date(o.createdAt).toLocaleDateString('es-MX'),
+        (o.customer?.name || 'Público General').substring(0, 22),
+        CHANNEL_LABELS[o.channel] || o.channel,
+        fmt(o.total),
+        o.status,
+      ]),
+      styles: { fontSize: 7.5, cellPadding: 2.5 },
+      headStyles: { fillColor: GREEN_RGB, textColor: [255,255,255], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: LIGHT_RGB },
+      columnStyles: { 0: { cellWidth: 24 }, 1: { cellWidth: 22 }, 4: { halign: 'right' }, 5: { cellWidth: 22 } },
+      margin: { left: 14, right: 14 },
+    })
+  }
+
+  addFooter(2, 2)
+  doc.save(`reporte-ventas-${dateFrom}-${dateTo}.pdf`)
+}
+
+const downloadInventoryPDF = async (invData) => {
+  if (!invData) return
+  const { jsPDF } = await import('jspdf')
+  const { default: autoTable } = await import('jspdf-autotable')
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+  const W = doc.internal.pageSize.getWidth()
+  const H = doc.internal.pageSize.getHeight()
+
+  const totalCost = invData.reduce((s, i) => s + (i.totalCostValue || 0), 0)
+  const totalSale = invData.reduce((s, i) => s + (i.totalSaleValue || 0), 0)
+  const lowStock = invData.filter(s => s.quantity > 0 && s.quantity <= s.product?.minStock).length
+  const outStock = invData.filter(s => s.quantity === 0).length
+
+  // Header
+  doc.setFillColor(...GREEN_RGB); doc.rect(0, 0, W, 28, 'F')
+  doc.setTextColor(255,255,255); doc.setFontSize(18); doc.setFont('helvetica','bold')
+  doc.text('AgroMaq de México', 14, 11)
+  doc.setFontSize(10); doc.setFont('helvetica','normal'); doc.setTextColor(200,230,200)
+  doc.text('Reporte de Inventario', 14, 20)
+  doc.text(new Date().toLocaleDateString('es-MX'), W - 14, 20, { align: 'right' })
+
+  // KPI boxes
+  const kpis = [
+    { label: 'Valor Costo Total', value: fmt(totalCost) },
+    { label: 'Valor Venta Total', value: fmt(totalSale) },
+    { label: 'Productos Stock Bajo', value: String(lowStock) },
+    { label: 'Productos Agotados', value: String(outStock) },
+  ]
+  const boxW = (W - 28 - 9) / 4
+  kpis.forEach((k, i) => {
+    const x = 14 + i * (boxW + 3)
+    doc.setFillColor(...LIGHT_RGB); doc.roundedRect(x, 33, boxW, 22, 3, 3, 'F')
+    doc.setDrawColor(...GREEN_RGB); doc.setLineWidth(0.5); doc.roundedRect(x, 33, boxW, 22, 3, 3, 'S')
+    doc.setTextColor(120,120,120); doc.setFontSize(7); doc.setFont('helvetica','normal')
+    doc.text(k.label, x + boxW / 2, 39, { align: 'center' })
+    doc.setTextColor(...GREEN_RGB); doc.setFontSize(13); doc.setFont('helvetica','bold')
+    doc.text(k.value, x + boxW / 2, 50, { align: 'center' })
+  })
+
+  // Inventory table
+  doc.setTextColor(...GREEN_RGB); doc.setFontSize(11); doc.setFont('helvetica','bold')
+  doc.text('Existencias por Producto', 14, 64)
+  autoTable(doc, {
+    startY: 67,
+    head: [['Producto', 'SKU', 'Categoría', 'Almacén', 'Existencia', 'Stock Mín.', 'Val. Costo', 'Val. Venta', 'Estado']],
+    body: invData.map(s => {
+      const status = s.quantity === 0 ? 'AGOTADO' : s.quantity <= s.product?.minStock ? 'BAJO' : 'OK'
+      return [
+        s.product?.name || '',
+        s.product?.sku || '',
+        s.product?.category?.name || '',
+        s.warehouse?.name || '',
+        s.quantity,
+        s.product?.minStock || 0,
+        fmt(s.totalCostValue),
+        fmt(s.totalSaleValue),
+        status,
+      ]
+    }),
+    styles: { fontSize: 7.5, cellPadding: 2.5 },
+    headStyles: { fillColor: GREEN_RGB, textColor: [255,255,255], fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: LIGHT_RGB },
+    columnStyles: {
+      4: { halign: 'center' }, 5: { halign: 'center' },
+      6: { halign: 'right' }, 7: { halign: 'right' },
+      8: {
+        halign: 'center',
+        cellWidth: 18,
+      },
+    },
+    didDrawCell: (data) => {
+      if (data.section === 'body' && data.column.index === 8) {
+        const val = data.cell.raw
+        const color = val === 'AGOTADO' ? [220,38,38] : val === 'BAJO' ? [217,119,6] : [22,163,74]
+        doc.setTextColor(...color)
+        doc.setFont('helvetica', 'bold')
+        doc.text(val, data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height / 2 + 1, { align: 'center' })
+        doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal')
+        return false
+      }
+    },
+    margin: { left: 14, right: 14 },
+  })
+
+  // Footer on all pages
+  const totalPages = doc.internal.getNumberOfPages()
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p)
+    doc.setFillColor(...GREEN_RGB); doc.rect(0, H - 12, W, 12, 'F')
+    doc.setTextColor(200,230,200); doc.setFontSize(7); doc.setFont('helvetica','normal')
+    doc.text(`Generado: ${new Date().toLocaleDateString('es-MX')}  ·  AgroMaq de México`, 14, H - 4)
+    doc.text(`Página ${p} de ${totalPages}`, W - 14, H - 4, { align: 'right' })
+  }
+
+  doc.save(`reporte-inventario-${new Date().toISOString().split('T')[0]}.pdf`)
+}
+
 export default function Reports() {
   const [tab, setTab] = useState('sales')
   const [loading, setLoading] = useState(false)
@@ -94,15 +326,25 @@ export default function Reports() {
           <p className="text-gray-500 text-sm">Análisis de ventas e inventario</p>
         </div>
         <div className="flex gap-2">
-          {tab === 'sales' && (
-            <button onClick={() => downloadExcel(`/api/reports/export/sales?from=${dateFrom}&to=${dateTo}`, 'reporte-ventas.xlsx')} className="btn-secondary flex items-center gap-2 text-sm">
-              <Download className="h-4 w-4" /> Excel Ventas
-            </button>
+          {tab === 'sales' && salesData && (
+            <>
+              <button onClick={() => downloadExcel(`/api/reports/export/sales?from=${dateFrom}&to=${dateTo}`, 'reporte-ventas.xlsx')} className="btn-secondary flex items-center gap-2 text-sm">
+                <Download className="h-4 w-4" /> Excel
+              </button>
+              <button onClick={() => downloadSalesPDF(salesData, dateFrom, dateTo)} className="btn-primary flex items-center gap-2 text-sm">
+                <FileText className="h-4 w-4" /> PDF
+              </button>
+            </>
           )}
-          {tab === 'inventory' && (
-            <button onClick={() => downloadExcel('/api/reports/export/inventory', 'reporte-inventario.xlsx')} className="btn-secondary flex items-center gap-2 text-sm">
-              <Download className="h-4 w-4" /> Excel Inventario
-            </button>
+          {tab === 'inventory' && invData && (
+            <>
+              <button onClick={() => downloadExcel('/api/reports/export/inventory', 'reporte-inventario.xlsx')} className="btn-secondary flex items-center gap-2 text-sm">
+                <Download className="h-4 w-4" /> Excel
+              </button>
+              <button onClick={() => downloadInventoryPDF(invData)} className="btn-primary flex items-center gap-2 text-sm">
+                <FileText className="h-4 w-4" /> PDF
+              </button>
+            </>
           )}
         </div>
       </div>
