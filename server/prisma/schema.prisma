@@ -33,6 +33,15 @@ model Company {
   logo           String?
   regimenFiscal  String?
   docSeries      String   @default("A")
+  // FINKOC / PAC CFDI settings
+  finkocUser     String?
+  finkocPassword String?
+  finkocRfc      String?
+  finkocEnv      String   @default("sandbox")
+  // Quote settings
+  quoteTerms     String?
+  quoteValidity  Int      @default(15)
+  quoteCurrency  String   @default("MXN")
   createdAt      DateTime @default(now())
 }
 
@@ -105,6 +114,7 @@ model Product {
   movements     InventoryMovement[]
   purchaseItems PurchaseOrderItem[]
   serials       SerialNumber[]
+  importItems   ImportItem[]
 }
 
 model ProductImage {
@@ -189,20 +199,28 @@ model Customer {
 }
 
 model Quote {
-  id         String    @id @default(cuid())
-  folio      String    @unique
-  customerId String?
-  customer   Customer? @relation(fields: [customerId], references: [id])
-  userId     String
-  notes      String?
-  subtotal   Decimal
-  discount   Decimal   @default(0)
-  tax        Decimal   @default(0)
-  total      Decimal
-  validUntil DateTime?
-  converted  Boolean   @default(false)
-  orderId    String?
-  createdAt  DateTime  @default(now())
+  id              String    @id @default(cuid())
+  folio           String    @unique
+  customerId      String?
+  customer        Customer? @relation(fields: [customerId], references: [id])
+  userId          String
+  status          String    @default("BORRADOR")
+  notes           String?
+  internalNotes   String?
+  terms           String?
+  currency        String    @default("MXN")
+  subtotal        Decimal
+  discount        Decimal   @default(0)
+  tax             Decimal   @default(0)
+  total           Decimal
+  validUntil      DateTime?
+  converted       Boolean   @default(false)
+  orderId         String?
+  approvedAt      DateTime?
+  approvedBy      String?
+  rejectedReason  String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   items QuoteItem[]
 }
@@ -279,11 +297,15 @@ model Supplier {
   email        String?
   phone        String?
   address      String?
+  country      String?
+  website      String?
+  currency     String   @default("USD")
   paymentTerms Int      @default(30)
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
 
   purchaseOrders PurchaseOrder[]
+  imports        Import[]
 }
 
 model PurchaseOrder {
@@ -380,4 +402,80 @@ model AuditLog {
   newData   String?
   ip        String?
   createdAt DateTime @default(now())
+}
+
+model Import {
+  id              String    @id @default(cuid())
+  reference       String    @unique
+  supplierId      String
+  supplier        Supplier  @relation(fields: [supplierId], references: [id])
+  status          String    @default("EN_TRANSITO")
+
+  // Factura comercial
+  invoiceNumber   String?
+  invoiceDate     DateTime?
+  invoiceAmount   Decimal   @default(0)
+  currency        String    @default("USD")
+  exchangeRate    Decimal   @default(1)
+
+  // Embarque / Contenedor
+  containerNumber String?
+  billOfLading    String?
+  vessel          String?
+  incoterm        String    @default("FOB")
+
+  // Puertos y fechas
+  originPort      String?
+  destinationPort String?
+  departureDate   DateTime?
+  etaPort         DateTime?
+  arrivalDate     DateTime?
+  customsDate     DateTime?
+  deliveryDate    DateTime?
+
+  // Costos
+  freightCost     Decimal   @default(0)
+  customsDuty     Decimal   @default(0)
+  dta             Decimal   @default(0)
+  igi             Decimal   @default(0)
+  iva             Decimal   @default(0)
+  otherCosts      Decimal   @default(0)
+  totalLandedCost Decimal   @default(0)
+
+  // Pedimento aduanal
+  pedimentoNumber String?
+  pedimentoDate   DateTime?
+  customsBroker   String?
+
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  items     ImportItem[]
+  documents ImportDocument[]
+}
+
+model ImportItem {
+  id          String  @id @default(cuid())
+  importId    String
+  import      Import  @relation(fields: [importId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product @relation(fields: [productId], references: [id])
+  description String?
+  hsCode      String?
+  quantity    Int
+  unitCost    Decimal
+  totalCost   Decimal
+  receivedQty Int     @default(0)
+}
+
+model ImportDocument {
+  id         String   @id @default(cuid())
+  importId   String
+  import     Import   @relation(fields: [importId], references: [id], onDelete: Cascade)
+  type       String
+  name       String
+  url        String?
+  notes      String?
+  createdAt  DateTime @default(now())
 }

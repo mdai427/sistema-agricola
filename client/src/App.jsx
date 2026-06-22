@@ -17,6 +17,7 @@ import Reports from './pages/Reports'
 import Config from './pages/Config'
 import Billing from './pages/Billing'
 import Integrations from './pages/Integrations'
+import Imports from './pages/Imports'
 
 function Protected({ children }) {
   const { user } = useAuthStore()
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="/clientes" element={<Protected><Customers /></Protected>} />
         <Route path="/proveedores" element={<Protected><Suppliers /></Protected>} />
         <Route path="/compras" element={<Protected><Purchases /></Protected>} />
+        <Route path="/importaciones" element={<Protected><Imports /></Protected>} />
         <Route path="/entregas" element={<Protected><Shipments /></Protected>} />
         <Route path="/caja" element={<Protected><Cash /></Protected>} />
         <Route path="/reportes" element={<Protected><Reports /></Protected>} />

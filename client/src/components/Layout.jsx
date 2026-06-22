@@ -4,7 +4,7 @@ import { useAuthStore } from '../store/authStore'
 import {
   LayoutDashboard, Package, Warehouse, ShoppingCart, Users, Truck, DollarSign,
   Settings, ChevronLeft, ChevronRight, LogOut, FileText, ShoppingBag,
-  BarChart2, Moon, Sun, Tractor, Bell, Zap
+  BarChart2, Moon, Sun, Tractor, Bell, Zap, Ship
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import api from '../lib/api'
@@ -19,6 +19,7 @@ const navItems = [
   { label: 'Clientes', icon: Users, path: '/clientes' },
   { label: 'Proveedores', icon: ShoppingBag, path: '/proveedores' },
   { label: 'Compras', icon: Package, path: '/compras' },
+  { label: 'Importaciones', icon: Ship, path: '/importaciones' },
   { label: 'Entregas', icon: Truck, path: '/entregas' },
   { label: 'Caja', icon: DollarSign, path: '/caja' },
   { label: 'Reportes', icon: BarChart2, path: '/reportes' },

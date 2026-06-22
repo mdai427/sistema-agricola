@@ -22,4 +22,28 @@ router.get('/me', auth, async (req, res) => {
   res.json({ id: req.user.id, name: req.user.name, email: req.user.email, role: req.user.role });
 });
 
+router.get('/company', auth, async (req, res) => {
+  try {
+    const company = await prisma.company.findFirst();
+    res.json(company || {});
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/company', auth, async (req, res) => {
+  try {
+    const { finkocPassword, ...data } = req.body;
+    const company = await prisma.company.findFirst();
+    const updateData = { ...data };
+    // Only update password if provided
+    if (finkocPassword && finkocPassword.trim()) updateData.finkocPassword = finkocPassword;
+    if (company) {
+      const updated = await prisma.company.update({ where: { id: company.id }, data: updateData });
+      res.json(updated);
+    } else {
+      const created = await prisma.company.create({ data: updateData });
+      res.json(created);
+    }
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;
