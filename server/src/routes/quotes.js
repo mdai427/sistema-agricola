@@ -140,7 +140,7 @@ router.get('/:id/pdf', auth, async (req, res) => {
   try {
     const quote = await prisma.quote.findUnique({
       where: { id: req.params.id },
-      include: { customer: true, items: { include: { product: true } } }
+      include: { customer: true, items: { include: { product: { include: { images: { where: { isPrimary: true } } } } } } }
     });
     if (!quote) return res.status(404).json({ error: 'No encontrada' });
     const company = await prisma.company.findFirst();
@@ -188,32 +188,46 @@ router.get('/:id/pdf', auth, async (req, res) => {
       .text(`Vendedor: ${req.user?.name || ''}`, 320, 159)
       .text(`Total artículos: ${quote.items.reduce((s, i) => s + i.quantity, 0)}`, 320, 173);
 
-    // Items table
+    // Items table — row height 36 to fit thumbnail
+    const ROW_H = 38;
+    const IMG_SIZE = 30;
     let y = 205;
     doc.rect(50, y, doc.page.width - 100, 20).fill(GREEN);
     doc.fillColor('white').fontSize(7.5).font('Helvetica-Bold')
-      .text('#', 55, y + 6, { width: 18 })
-      .text('SKU', 73, y + 6, { width: 65 })
-      .text('DESCRIPCIÓN', 138, y + 6, { width: 185 })
-      .text('CANT.', 323, y + 6, { width: 35, align: 'right' })
-      .text('P. UNITARIO', 358, y + 6, { width: 65, align: 'right' })
-      .text('DSCTO', 423, y + 6, { width: 35, align: 'right' })
-      .text('SUBTOTAL', 458, y + 6, { width: 87, align: 'right' });
+      .text('IMG', 55, y + 6, { width: IMG_SIZE + 2 })
+      .text('SKU', 90, y + 6, { width: 60 })
+      .text('DESCRIPCIÓN', 150, y + 6, { width: 170 })
+      .text('CANT.', 320, y + 6, { width: 35, align: 'right' })
+      .text('P. UNIT.', 355, y + 6, { width: 65, align: 'right' })
+      .text('DSCTO', 420, y + 6, { width: 35, align: 'right' })
+      .text('SUBTOTAL', 455, y + 6, { width: 90, align: 'right' });
     y += 22;
 
-    quote.items.forEach((item, idx) => {
-      if (y > doc.page.height - 200) { doc.addPage(); y = 50; }
-      if (idx % 2 === 0) doc.rect(50, y - 1, doc.page.width - 100, 19).fill('#f9fafb');
+    for (const [idx, item] of quote.items.entries()) {
+      if (y > doc.page.height - 220) { doc.addPage(); y = 50; }
+      if (idx % 2 === 0) doc.rect(50, y - 1, doc.page.width - 100, ROW_H).fill('#f9fafb');
+
+      // Embed product image if available
+      const imgUrl = item.product?.images?.[0]?.url;
+      if (imgUrl && imgUrl.startsWith('data:image/')) {
+        try {
+          const mimeMatch = imgUrl.match(/^data:(image\/\w+);base64,/);
+          const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+          const b64 = imgUrl.replace(/^data:image\/\w+;base64,/, '');
+          const imgBuf = Buffer.from(b64, 'base64');
+          doc.image(imgBuf, 54, y + 4, { width: IMG_SIZE, height: IMG_SIZE, fit: [IMG_SIZE, IMG_SIZE], align: 'center', valign: 'center' });
+        } catch (e) { /* ignore image embed errors */ }
+      }
+
       doc.fillColor('#111827').fontSize(8).font('Helvetica')
-        .text(idx + 1, 55, y + 4, { width: 18 })
-        .text(item.product?.sku || '', 73, y + 4, { width: 65 })
-        .text(item.product?.name || '', 138, y + 4, { width: 183 })
-        .text(item.quantity, 323, y + 4, { width: 35, align: 'right' })
-        .text(fmt(item.price), 358, y + 4, { width: 65, align: 'right' })
-        .text(item.discount > 0 ? `${item.discount}%` : '—', 423, y + 4, { width: 35, align: 'right' })
-        .text(fmt(item.subtotal), 458, y + 4, { width: 87, align: 'right' });
-      y += 19;
-    });
+        .text(item.product?.sku || '', 90, y + 12, { width: 60 })
+        .text(item.product?.name || '', 150, y + 12, { width: 168 })
+        .text(item.quantity, 320, y + 12, { width: 35, align: 'right' })
+        .text(fmt(item.price), 355, y + 12, { width: 65, align: 'right' })
+        .text(item.discount > 0 ? `${item.discount}%` : '—', 420, y + 12, { width: 35, align: 'right' })
+        .text(fmt(item.subtotal), 455, y + 12, { width: 90, align: 'right' });
+      y += ROW_H;
+    }
 
     doc.rect(50, y + 4, doc.page.width - 100, 1).fill('#e5e7eb');
     y += 14;

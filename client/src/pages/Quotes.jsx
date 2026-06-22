@@ -84,7 +84,7 @@ export default function Quotes() {
     setForm(f => {
       const ex = f.items.find(i => i.productId === product.id)
       if (ex) return { ...f, items: f.items.map(i => i.productId === product.id ? { ...i, quantity: i.quantity + 1, subtotal: (i.quantity + 1) * i.price * (1 - i.discount / 100) } : i) }
-      return { ...f, items: [...f.items, { productId: product.id, sku: product.sku, name: product.name, quantity: 1, price: parseFloat(product.salePrice), discount: 0, subtotal: parseFloat(product.salePrice) }] }
+      return { ...f, items: [...f.items, { productId: product.id, sku: product.sku, name: product.name, imageUrl: product.images?.[0]?.url || null, quantity: 1, price: parseFloat(product.salePrice), discount: 0, subtotal: parseFloat(product.salePrice) }] }
     })
     setProductSearch('')
   }
@@ -318,15 +318,22 @@ export default function Quotes() {
                 <div className="relative">
                   <input className="input w-full" value={productSearch} onChange={e => setProductSearch(e.target.value)} placeholder="Buscar por nombre o SKU..." />
                   {filteredProducts.length > 0 && (
-                    <div className="absolute z-10 w-full bg-white border rounded-lg shadow-lg mt-1 max-h-56 overflow-y-auto">
+                    <div className="absolute z-10 w-full bg-white border rounded-lg shadow-lg mt-1 max-h-64 overflow-y-auto">
                       {filteredProducts.map(p => (
-                        <button key={p.id} type="button" className="w-full text-left px-4 py-2.5 hover:bg-green-50 text-sm flex justify-between items-center border-b last:border-0"
+                        <button key={p.id} type="button" className="w-full text-left px-3 py-2 hover:bg-green-50 text-sm flex items-center gap-3 border-b last:border-0"
                           onClick={() => addItem(p)}>
-                          <div>
-                            <span className="font-medium">{p.name}</span>
-                            <span className="text-gray-400 ml-2 text-xs">{p.sku}</span>
+                          {p.images?.[0] ? (
+                            <img src={p.images[0].url} className="h-10 w-10 rounded-lg object-cover border shrink-0" alt="" />
+                          ) : (
+                            <div className="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center border shrink-0">
+                              <FileText className="h-4 w-4 text-gray-300" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{p.name}</p>
+                            <p className="text-gray-400 text-xs">{p.sku}</p>
                           </div>
-                          <span className="font-bold text-green-700">{fmt(p.salePrice)}</span>
+                          <span className="font-bold text-green-700 shrink-0">{fmt(p.salePrice)}</span>
                         </button>
                       ))}
                     </div>
@@ -340,7 +347,7 @@ export default function Quotes() {
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50">
                       <tr>
-                        {['SKU', 'Producto', 'Cant.', 'Precio Unit.', 'Dscto %', 'Subtotal', ''].map(h => (
+                        {['', 'SKU', 'Producto', 'Cant.', 'Precio Unit.', 'Dscto %', 'Subtotal', ''].map(h => (
                           <th key={h} className="text-left px-3 py-2 text-xs font-medium text-gray-700">{h}</th>
                         ))}
                       </tr>
@@ -348,8 +355,17 @@ export default function Quotes() {
                     <tbody className="divide-y">
                       {form.items.map((item, idx) => (
                         <tr key={idx}>
+                          <td className="px-2 py-2">
+                            {item.imageUrl ? (
+                              <img src={item.imageUrl} className="h-10 w-10 rounded-lg object-cover border" alt="" />
+                            ) : (
+                              <div className="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center border">
+                                <FileText className="h-4 w-4 text-gray-300" />
+                              </div>
+                            )}
+                          </td>
                           <td className="px-3 py-2 font-mono text-xs text-gray-500">{item.sku}</td>
-                          <td className="px-3 py-2">{item.name}</td>
+                          <td className="px-3 py-2 font-medium">{item.name}</td>
                           <td className="px-3 py-2">
                             <input type="number" min={1} className="input w-16 py-1 text-center text-sm" value={item.quantity}
                               onChange={e => updateItem(idx, 'quantity', parseInt(e.target.value) || 1)} />
@@ -426,12 +442,21 @@ export default function Quotes() {
               </div>
               <table className="w-full text-sm border rounded">
                 <thead className="bg-gray-50"><tr>
-                  {['Producto', 'SKU', 'Cant.', 'Precio', 'Desc.', 'Subtotal'].map(h => <th key={h} className="text-left px-3 py-2 text-xs">{h}</th>)}
+                  {['', 'Producto', 'SKU', 'Cant.', 'Precio', 'Desc.', 'Subtotal'].map(h => <th key={h} className="text-left px-3 py-2 text-xs">{h}</th>)}
                 </tr></thead>
                 <tbody className="divide-y">
                   {viewQuote.items?.map(item => (
                     <tr key={item.id}>
-                      <td className="px-3 py-2">{item.product?.name}</td>
+                      <td className="px-2 py-2">
+                        {item.product?.images?.[0] ? (
+                          <img src={item.product.images[0].url} className="h-10 w-10 rounded-lg object-cover border" alt="" />
+                        ) : (
+                          <div className="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center border">
+                            <FileText className="h-4 w-4 text-gray-300" />
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 font-medium">{item.product?.name}</td>
                       <td className="px-3 py-2 font-mono text-xs">{item.product?.sku}</td>
                       <td className="px-3 py-2 text-center">{item.quantity}</td>
                       <td className="px-3 py-2">{fmt(item.price)}</td>

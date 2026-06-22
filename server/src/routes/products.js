@@ -92,6 +92,35 @@ router.delete('/:id', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Upload product image (stored as base64 in DB)
+router.post('/:id/images', auth, upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Imagen requerida' });
+    const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!allowed.includes(req.file.mimetype)) return res.status(400).json({ error: 'Solo se permiten imágenes JPG, PNG o WebP' });
+    // Resize to max 800px wide via sharp if available, else store raw
+    let buf = req.file.buffer;
+    try {
+      const sharp = require('sharp');
+      buf = await sharp(req.file.buffer).resize({ width: 800, withoutEnlargement: true }).jpeg({ quality: 80 }).toBuffer();
+    } catch (e) { /* sharp not available, use original */ }
+    const base64 = `data:${req.file.mimetype};base64,${buf.toString('base64')}`;
+    // Set existing images to non-primary
+    await prisma.productImage.updateMany({ where: { productId: req.params.id }, data: { isPrimary: false } });
+    const image = await prisma.productImage.create({
+      data: { productId: req.params.id, url: base64, isPrimary: true, order: 0 }
+    });
+    res.status(201).json(image);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/:id/images/:imageId', auth, async (req, res) => {
+  try {
+    await prisma.productImage.delete({ where: { id: req.params.imageId } });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.post('/import-excel', auth, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Archivo requerido' });
