@@ -459,14 +459,14 @@ model ImportItem {
   id          String  @id @default(cuid())
   importId    String
   import      Import  @relation(fields: [importId], references: [id], onDelete: Cascade)
-  productId   String
-  product     Product @relation(fields: [productId], references: [id])
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id])
   description String?
   hsCode      String?
-  quantity    Int
+  quantity    Float
   unitCost    Decimal
   totalCost   Decimal
-  receivedQty Int     @default(0)
+  receivedQty Float    @default(0)
 }
 
 model ImportDocument {
