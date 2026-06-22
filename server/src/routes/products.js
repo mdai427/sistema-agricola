@@ -5,11 +5,24 @@ const multer = require('multer');
 const XLSX = require('xlsx');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
+router.get('/excel-template', auth, async (req, res) => {
+  const wb = XLSX.utils.book_new();
+  const headers = [['SKU','Nombre','Descripción','Categoría','Marca','Modelo','Precio Costo','Precio Venta','Stock Mínimo']];
+  const example = [['PROD-001','Motosierra Ejemplo','Descripción del producto','Motosierras','STIHL','MS 170',2800,3950,3]];
+  const ws = XLSX.utils.aoa_to_sheet([...headers, ...example]);
+  ws['!cols'] = headers[0].map(() => ({ wch: 20 }));
+  XLSX.utils.book_append_sheet(wb, ws, 'Productos');
+  const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename=plantilla_productos.xlsx');
+  res.send(buf);
+});
+
 router.get('/', auth, async (req, res) => {
   try {
     const { search, categoryId, brandId, status, page = 1, limit = 20 } = req.query;
     const where = {};
-    if (search) where.OR = [{ name: { contains: search, mode: 'insensitive' } }, { sku: { contains: search, mode: 'insensitive' } }];
+    if (search) where.OR = [{ name: { contains: search } }, { sku: { contains: search } }];
     if (categoryId) where.categoryId = categoryId;
     if (brandId) where.brandId = brandId;
     if (status) where.status = status;
@@ -123,19 +136,6 @@ router.post('/import-excel', auth, upload.single('file'), async (req, res) => {
     }
     res.json(results);
   } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-router.get('/excel-template', auth, async (req, res) => {
-  const wb = XLSX.utils.book_new();
-  const headers = [['SKU','Nombre','Descripción','Categoría','Marca','Modelo','Precio Costo','Precio Venta','Stock Mínimo']];
-  const example = [['PROD-001','Motosierra Ejemplo','Descripción del producto','Motosierras','STIHL','MS 170',2800,3950,3]];
-  const ws = XLSX.utils.aoa_to_sheet([...headers, ...example]);
-  ws['!cols'] = headers[0].map(() => ({ wch: 20 }));
-  XLSX.utils.book_append_sheet(wb, ws, 'Productos');
-  const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', 'attachment; filename=plantilla_productos.xlsx');
-  res.send(buf);
 });
 
 module.exports = router;
