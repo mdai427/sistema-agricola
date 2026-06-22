@@ -1,0 +1,2 @@
+# Usa este schema para producción con PostgreSQL en Railway
+# Cambia provider a "postgresql" y url a env("DATABASE_URL")
