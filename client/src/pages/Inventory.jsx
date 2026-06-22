@@ -91,6 +91,7 @@ export default function Inventory() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-14"></TableHead>
                     <TableHead>Producto</TableHead>
                     <TableHead>SKU</TableHead>
                     <TableHead>Almacén</TableHead>
@@ -102,6 +103,11 @@ export default function Inventory() {
                 <TableBody>
                   {stocks.map(s => (
                     <TableRow key={s.id}>
+                      <TableCell>
+                        {s.product?.images?.[0]?.url
+                          ? <img src={s.product.images[0].url} alt="" className="h-10 w-10 rounded-lg object-cover border" />
+                          : <div className="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center text-gray-300 text-xs border">—</div>}
+                      </TableCell>
                       <TableCell className="font-medium">{s.product?.name}</TableCell>
                       <TableCell className="font-mono text-xs">{s.product?.sku}</TableCell>
                       <TableCell>{s.warehouse?.name}</TableCell>
