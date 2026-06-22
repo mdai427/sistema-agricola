@@ -31,7 +31,8 @@ export default function App() {
       <Toaster />
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/" element={<Protected><Dashboard /></Protected>} />
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
         <Route path="/productos" element={<Protected><Products /></Protected>} />
         <Route path="/inventario" element={<Protected><Inventory /></Protected>} />
         <Route path="/ventas" element={<Protected><Orders /></Protected>} />

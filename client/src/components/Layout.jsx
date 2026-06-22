@@ -11,7 +11,7 @@ import api from '../lib/api'
 import { AlertsPanel } from './AlertsPanel'
 
 const navItems = [
-  { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
+  { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
   { label: 'Productos', icon: Package, path: '/productos' },
   { label: 'Inventario', icon: Warehouse, path: '/inventario' },
   { label: 'Ventas', icon: ShoppingCart, path: '/ventas' },
