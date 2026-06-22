@@ -12,15 +12,19 @@ const dateWhere = (from, to) => {
 // Sales summary + charts data
 router.get('/sales', auth, async (req, res) => {
   try {
-    const { from, to } = req.query;
+    const { from, to, page = 1, limit = 200 } = req.query;
     const createdAt = dateWhere(from, to);
     const where = { status: { notIn: ['CANCELADO'] }, ...(createdAt && { createdAt }) };
+    const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const orders = await prisma.order.findMany({
-      where,
-      include: { customer: true, user: { select: { name: true } }, items: { include: { product: { include: { category: true } } } } },
-      orderBy: { createdAt: 'desc' }
-    });
+    const [orders, totalCount] = await Promise.all([
+      prisma.order.findMany({
+        where, skip, take: parseInt(limit),
+        include: { customer: true, user: { select: { name: true } }, items: { include: { product: { include: { category: true } } } } },
+        orderBy: { createdAt: 'desc' }
+      }),
+      prisma.order.count({ where })
+    ]);
 
     // By channel
     const byChannel = {};
@@ -62,6 +66,9 @@ router.get('/sales', auth, async (req, res) => {
       orders,
       totalRevenue,
       totalOrders,
+      totalCount,
+      page: parseInt(page),
+      limit: parseInt(limit),
       byChannel: Object.values(byChannel),
       byDay: Object.values(byDay).sort((a, b) => a.date.localeCompare(b.date)),
       byCategory: Object.values(byCategory).sort((a, b) => b.total - a.total),

@@ -7,14 +7,35 @@ router.get('/stocks', auth, async (req, res) => {
     const { warehouseId, lowStock } = req.query;
     const where = {};
     if (warehouseId) where.warehouseId = warehouseId;
-    if (lowStock === 'true') where.product = { status: 'ACTIVO' };
+    if (lowStock === 'true') {
+      // Filter low-stock in DB using raw query to avoid loading all records in memory
+      const stocks = warehouseId
+        ? await prisma.$queryRaw`
+            SELECT s.id FROM "Stock" s
+            JOIN "Product" p ON p.id = s."productId"
+            WHERE p.status = 'ACTIVO' AND s.quantity <= p."minStock" AND s."warehouseId" = ${warehouseId}
+            ORDER BY s.quantity ASC`
+        : await prisma.$queryRaw`
+            SELECT s.id FROM "Stock" s
+            JOIN "Product" p ON p.id = s."productId"
+            WHERE p.status = 'ACTIVO' AND s.quantity <= p."minStock"
+            ORDER BY s.quantity ASC`;
+      // Fetch full data for matching ids
+      const ids = stocks.map(s => s.id);
+      if (!ids.length) return res.json([]);
+      const full = await prisma.stock.findMany({
+        where: { id: { in: ids } },
+        include: { product: { include: { category: true, brand: true, images: { where: { isPrimary: true } } } }, warehouse: true },
+        orderBy: { quantity: 'asc' }
+      });
+      return res.json(full);
+    }
     const stocks = await prisma.stock.findMany({
       where,
       include: { product: { include: { category: true, brand: true, images: { where: { isPrimary: true } } } }, warehouse: true },
       orderBy: { product: { name: 'asc' } }
     });
-    const filtered = lowStock === 'true' ? stocks.filter(s => s.quantity <= s.product.minStock) : stocks;
-    res.json(filtered);
+    res.json(stocks);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

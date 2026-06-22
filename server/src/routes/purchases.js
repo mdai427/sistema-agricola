@@ -9,11 +9,21 @@ const generateFolio = async () => {
 
 router.get('/', auth, async (req, res) => {
   try {
-    const orders = await prisma.purchaseOrder.findMany({
-      include: { supplier: true, items: { include: { product: true } } },
-      orderBy: { createdAt: 'desc' }
-    });
-    res.json(orders);
+    const { page = 1, limit = 50, status, supplierId } = req.query;
+    const where = {};
+    if (status) where.status = status;
+    if (supplierId) where.supplierId = supplierId;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const [orders, total] = await Promise.all([
+      prisma.purchaseOrder.findMany({
+        where, skip, take: parseInt(limit),
+        include: { supplier: true, items: { include: { product: true } } },
+        orderBy: { createdAt: 'desc' }
+      }),
+      prisma.purchaseOrder.count({ where })
+    ]);
+    const pages = Math.ceil(total / parseInt(limit));
+    res.json({ purchases: orders, total, pages });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

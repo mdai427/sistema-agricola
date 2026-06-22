@@ -9,11 +9,18 @@ router.get('/', auth, async (req, res) => {
     if (status) where.status = status;
     if (assignedTo) where.assignedTo = assignedTo;
     if (date) { const d = new Date(date); const next = new Date(d); next.setDate(next.getDate() + 1); where.scheduledAt = { gte: d, lt: next }; }
-    const shipments = await prisma.shipment.findMany({
-      where, include: { order: { include: { customer: true, items: { include: { product: true } } } } },
-      orderBy: { createdAt: 'desc' }
-    });
-    res.json(shipments);
+    const { page = 1, limit = 50 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const [shipments, total] = await Promise.all([
+      prisma.shipment.findMany({
+        where, skip, take: parseInt(limit),
+        include: { order: { include: { customer: true, items: { include: { product: true } } } } },
+        orderBy: { createdAt: 'desc' }
+      }),
+      prisma.shipment.count({ where })
+    ]);
+    const pages = Math.ceil(total / parseInt(limit));
+    res.json({ shipments, total, pages });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
