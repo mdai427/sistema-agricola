@@ -2,6 +2,7 @@ const router = require('express').Router();
 const prisma = require('../lib/prisma');
 const { auth } = require('../middleware/auth');
 const XLSX = require('xlsx');
+const { enqueue } = require('../lib/queues');
 
 // Helper: build date where clause
 const dateWhere = (from, to) => {
@@ -117,92 +118,20 @@ router.get('/quotes', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Export sales to Excel
-router.get('/export/sales', auth, async (req, res) => {
+// Export sales to Excel — async job, returns jobId for polling
+router.post('/export/sales', auth, async (req, res) => {
   try {
-    const { from, to } = req.query;
-    const createdAt = dateWhere(from, to);
-    const orders = await prisma.order.findMany({
-      where: { status: { notIn: ['CANCELADO'] }, ...(createdAt && { createdAt }) },
-      include: { customer: true, user: { select: { name: true } }, items: { include: { product: true } } },
-      orderBy: { createdAt: 'desc' }
-    });
-
-    const rows = [];
-    for (const o of orders) {
-      for (const item of o.items) {
-        rows.push({
-          'Folio': o.folio,
-          'Fecha': new Date(o.createdAt).toLocaleDateString('es-MX'),
-          'Cliente': o.customer?.name || 'Público General',
-          'RFC Cliente': o.customer?.rfc || 'XAXX010101000',
-          'Canal': o.channel,
-          'Vendedor': o.user?.name,
-          'SKU': item.product?.sku,
-          'Producto': item.product?.name,
-          'Cantidad': item.quantity,
-          'Precio Unitario': parseFloat(item.price),
-          'Descuento': parseFloat(item.discount || 0),
-          'Subtotal Línea': parseFloat(item.subtotal),
-          'Total Pedido': parseFloat(o.total),
-          'Estado': o.status,
-          'Método Pago': o.paymentMethod,
-        });
-      }
-    }
-
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = Object.keys(rows[0] || {}).map(() => ({ wch: 20 }));
-    XLSX.utils.book_append_sheet(wb, ws, 'Ventas');
-
-    // Summary sheet
-    const summary = [
-      { 'Concepto': 'Total Pedidos', 'Valor': orders.length },
-      { 'Concepto': 'Total Ingresos', 'Valor': orders.reduce((s, o) => s + parseFloat(o.total || 0), 0) },
-      { 'Concepto': 'Período Desde', 'Valor': from || 'Inicio' },
-      { 'Concepto': 'Período Hasta', 'Valor': to || 'Hoy' },
-    ];
-    const wsSummary = XLSX.utils.json_to_sheet(summary);
-    XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumen');
-
-    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=reporte-ventas-${Date.now()}.xlsx`);
-    res.send(buf);
+    const { from, to } = req.body;
+    const { jobId, mode } = await enqueue('reports', 'export-sales', { from, to, requestedBy: req.user.id });
+    res.status(202).json({ queued: true, jobId, mode, pollUrl: `/api/jobs/reports/${jobId}` });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Export inventory to Excel
-router.get('/export/inventory', auth, async (req, res) => {
+// Export inventory to Excel — async job
+router.post('/export/inventory', auth, async (req, res) => {
   try {
-    const stocks = await prisma.stock.findMany({
-      include: { product: { include: { category: true, brand: true } }, warehouse: true },
-      orderBy: { product: { name: 'asc' } }
-    });
-    const rows = stocks.map(s => ({
-      'SKU': s.product.sku,
-      'Producto': s.product.name,
-      'Modelo': s.product.model || '',
-      'Categoría': s.product.category?.name || '',
-      'Marca': s.product.brand?.name || '',
-      'Almacén': s.warehouse.name,
-      'Existencia': s.quantity,
-      'Stock Mínimo': s.product.minStock,
-      'Estado': s.quantity === 0 ? 'AGOTADO' : s.quantity <= s.product.minStock ? 'BAJO' : 'OK',
-      'Precio Costo': parseFloat(s.product.costPrice),
-      'Precio Venta': parseFloat(s.product.salePrice),
-      'Valor Costo Total': parseFloat(s.product.costPrice) * s.quantity,
-      'Valor Venta Total': parseFloat(s.product.salePrice) * s.quantity,
-    }));
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = Object.keys(rows[0] || {}).map(() => ({ wch: 18 }));
-    XLSX.utils.book_append_sheet(wb, ws, 'Inventario');
-    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=reporte-inventario-${Date.now()}.xlsx`);
-    res.send(buf);
+    const { jobId, mode } = await enqueue('reports', 'export-inventory', { requestedBy: req.user.id });
+    res.status(202).json({ queued: true, jobId, mode, pollUrl: `/api/jobs/reports/${jobId}` });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

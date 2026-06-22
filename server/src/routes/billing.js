@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const prisma = require('../lib/prisma');
 const { auth } = require('../middleware/auth');
+const { enqueue } = require('../lib/queues');
 
 // Get FINKOC configuration from company
 router.get('/config', auth, async (req, res) => {
@@ -81,53 +82,18 @@ router.get('/:orderId/cfdi-data', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Stamp CFDI via FINKOC (simulated when no credentials)
+// Stamp CFDI via FINKOC — enqueued async job
 router.post('/:orderId/stamp', auth, async (req, res) => {
   try {
-    const company = await prisma.company.findFirst();
-    const order = await prisma.order.findUnique({
-      where: { id: req.params.orderId },
-      include: { customer: true, items: { include: { product: true } } }
-    });
+    const order = await prisma.order.findUnique({ where: { id: req.params.orderId } });
     if (!order) return res.status(404).json({ error: 'Pedido no encontrado' });
 
-    const hasCredentials = company?.finkocUser && company?.finkocPassword;
+    const { jobId, mode } = await enqueue('billing', 'stamp-cfdi', {
+      orderId: req.params.orderId,
+      cfdiPayload: req.body,
+    });
 
-    if (hasCredentials) {
-      // Real FINKOC call
-      try {
-        const axios = require('axios');
-        const cfdiData = req.body;
-        const finkocEnv = company.finkocEnv === 'production' ? 'https://api.finkoc.com/v1' : 'https://sandbox.finkoc.com/v1';
-        const response = await axios.post(`${finkocEnv}/cfdi40/stamp`, cfdiData, {
-          auth: { username: company.finkocUser, password: company.finkocPassword },
-          timeout: 15000
-        });
-        const { uuid, xml, qr } = response.data;
-        await prisma.order.update({
-          where: { id: req.params.orderId },
-          data: { cfdiUse: req.body.receptor?.usoCFDI || 'G03', regimenFiscal: req.body.receptor?.regimenFiscal || '616' }
-        });
-        return res.json({ success: true, uuid, xml, qr, mode: 'finkoc' });
-      } catch (finkocErr) {
-        return res.status(502).json({ error: `FINKOC error: ${finkocErr.message}` });
-      }
-    } else {
-      // Simulate
-      const uuid = `SIM-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-      await prisma.order.update({
-        where: { id: req.params.orderId },
-        data: { cfdiUse: req.body.receptor?.usoCFDI || 'G03', regimenFiscal: req.body.receptor?.regimenFiscal || '616' }
-      });
-      return res.json({
-        success: true,
-        uuid,
-        xml: `<!-- CFDI 4.0 SIMULADO - Configure credenciales FINKOC en Configuración -->\n<Comprobante UUID="${uuid}" Total="${req.body.total}" />`,
-        qr: null,
-        mode: 'simulado',
-        warning: 'CFDI simulado — configure credenciales FINKOC en Configuración > Facturación'
-      });
-    }
+    res.status(202).json({ queued: true, jobId, mode, message: 'Sellado CFDI en proceso. Consulta el estado con jobId.' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

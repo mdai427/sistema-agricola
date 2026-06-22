@@ -1,61 +1,31 @@
 const router = require('express').Router();
 const { auth, requireRole } = require('../middleware/auth');
+const { enqueue } = require('../lib/queues');
 
-// WhatsApp send message via Twilio
+// WhatsApp send message — fire and forget via queue
 router.post('/whatsapp/send', auth, async (req, res) => {
   try {
     const { to, message } = req.body;
-    if (!process.env.TWILIO_ACCOUNT_SID || process.env.TWILIO_ACCOUNT_SID === 'your_twilio_sid') {
-      return res.json({ success: false, simulated: true, message: `[SIMULADO] WhatsApp a ${to}: ${message}` });
-    }
-    const twilio = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-    const msg = await twilio.messages.create({
-      from: process.env.TWILIO_WHATSAPP_FROM,
-      to: `whatsapp:${to}`,
-      body: message
-    });
-    res.json({ success: true, sid: msg.sid });
+    const { jobId, mode } = await enqueue('notifications', 'whatsapp', { to, message });
+    res.json({ queued: true, jobId, mode });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Notify order status via WhatsApp
+// Notify order status via WhatsApp — fire and forget
 router.post('/whatsapp/notify-order', auth, async (req, res) => {
   try {
     const { orderId, event } = req.body;
-    const prisma = require('../lib/prisma');
-    const order = await prisma.order.findUnique({ where: { id: orderId }, include: { customer: true } });
-    if (!order?.customer?.whatsapp) return res.json({ success: false, reason: 'Cliente sin WhatsApp' });
-    const messages = {
-      CONFIRMADO: `✅ Tu pedido *${order.folio}* ha sido confirmado. Total: $${parseFloat(order.total).toFixed(2)} MXN. ¡Gracias por tu compra!`,
-      ENVIADO: `🚚 Tu pedido *${order.folio}* está en camino. Te avisaremos cuando sea entregado.`,
-      ENTREGADO: `🎉 Tu pedido *${order.folio}* ha sido entregado. ¡Gracias por confiar en AgroMaq!`
-    };
-    const message = messages[event] || `Actualización de tu pedido ${order.folio}: ${event}`;
-    const to = order.customer.whatsapp.replace(/\D/g, '');
-
-    if (!process.env.TWILIO_ACCOUNT_SID || process.env.TWILIO_ACCOUNT_SID === 'your_twilio_sid') {
-      return res.json({ success: true, simulated: true, to, message });
-    }
-    const twilio = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-    await twilio.messages.create({ from: process.env.TWILIO_WHATSAPP_FROM, to: `whatsapp:+${to}`, body: message });
-    res.json({ success: true });
+    const { jobId, mode } = await enqueue('notifications', 'whatsapp-order', { orderId, event });
+    res.json({ queued: true, jobId, mode });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Email send via SMTP (nodemailer or simulated)
+// Email send — queued
 router.post('/email/send', auth, async (req, res) => {
   try {
-    const { to, subject, body, orderId } = req.body;
-    if (!process.env.SMTP_HOST) {
-      return res.json({ success: true, simulated: true, message: `[SIMULADO] Email a ${to}: ${subject}` });
-    }
-    const nodemailer = require('nodemailer');
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST, port: parseInt(process.env.SMTP_PORT || 587),
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-    });
-    await transporter.sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to, subject, html: body });
-    res.json({ success: true });
+    const { to, subject, body } = req.body;
+    const { jobId, mode } = await enqueue('notifications', 'email', { to, subject, body });
+    res.json({ queued: true, jobId, mode });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

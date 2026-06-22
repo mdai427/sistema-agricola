@@ -3,6 +3,12 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 
+// Start background workers (no-op if Redis unavailable)
+require('./workers/notifications.worker');
+require('./workers/billing.worker');
+require('./workers/reports.worker');
+require('./workers/imports.worker');
+
 const app = express();
 
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
@@ -33,6 +39,7 @@ app.use('/api/billing', require('./routes/billing'));
 app.use('/api/integrations', require('./routes/integrations'));
 app.use('/api/alerts', require('./routes/alerts'));
 app.use('/api/imports', require('./routes/imports'));
+app.use('/api/jobs', require('./routes/jobs'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));
 

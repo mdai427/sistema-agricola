@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import api from '../lib/api'
+import { useJob, downloadReportJob } from '../lib/useJob'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -15,15 +16,7 @@ const GREENS = ['#1a5c2a', '#2e7d32', '#43a047', '#66bb6a', '#a5d6a7', '#c8e6c9'
 const CHANNEL_LABELS = { TIENDA_FISICA: 'Tienda', MERCADO_LIBRE: 'ML', AMAZON: 'Amazon', WHATSAPP: 'WA', WEB: 'Web' }
 const fmt = v => `$${parseFloat(v || 0).toLocaleString('es-MX', { minimumFractionDigits: 0 })}`
 
-const downloadExcel = async (endpoint, filename) => {
-  try {
-    const token = localStorage.getItem('token')
-    const res = await fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } })
-    if (!res.ok) throw new Error()
-    const blob = await res.blob()
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click()
-  } catch { alert('Error al exportar Excel') }
-}
+// Replaced by async job flow — see useExcelExport hook below
 
 const GREEN_RGB = [26, 92, 42]
 const LIGHT_RGB = [240, 247, 241]
@@ -257,6 +250,30 @@ const downloadInventoryPDF = async (invData) => {
   doc.save(`reporte-inventario-${new Date().toISOString().split('T')[0]}.pdf`)
 }
 
+function ExportButton({ onClick, job, jobId, label }) {
+  const busy = jobId && (job.isWaiting || job.isActive)
+  const progress = job.progress ?? 0
+  return (
+    <button
+      onClick={onClick}
+      disabled={busy}
+      className="btn-secondary flex items-center gap-2 text-sm min-w-[140px]"
+    >
+      {busy ? (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin" />
+          {progress > 0 ? `${progress}%` : 'Generando…'}
+        </>
+      ) : (
+        <>
+          <Download className="h-4 w-4" />
+          {label}
+        </>
+      )}
+    </button>
+  )
+}
+
 export default function Reports() {
   const [tab, setTab] = useState('sales')
   const [loading, setLoading] = useState(false)
@@ -264,6 +281,26 @@ export default function Reports() {
   const [invData, setInvData] = useState(null)
   const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().split('T')[0] })
   const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0])
+
+  // Async export job state
+  const [exportJobId, setExportJobId] = useState(null)
+  const [exportQueue, setExportQueue] = useState(null)
+  const exportJob = useJob(exportQueue, exportJobId)
+
+  // Auto-download when job completes
+  useEffect(() => {
+    if (exportJob.isComplete && exportJobId) {
+      downloadReportJob(exportJobId, exportQueue === 'reports' ? 'reporte.xlsx' : 'reporte.xlsx')
+        .then(() => { setExportJobId(null); setExportQueue(null) })
+    }
+  }, [exportJob.isComplete, exportJobId, exportQueue])
+
+  const startExport = useCallback(async (type) => {
+    try {
+      const r = await api.post(`/reports/export/${type}`, type === 'sales' ? { from: dateFrom, to: dateTo } : {})
+      if (r.data.jobId) { setExportJobId(r.data.jobId); setExportQueue('reports') }
+    } catch { alert('Error al iniciar exportación') }
+  }, [dateFrom, dateTo])
 
   const loadSales = async () => {
     setLoading(true)
@@ -328,9 +365,7 @@ export default function Reports() {
         <div className="flex gap-2">
           {tab === 'sales' && salesData && (
             <>
-              <button onClick={() => downloadExcel(`/api/reports/export/sales?from=${dateFrom}&to=${dateTo}`, 'reporte-ventas.xlsx')} className="btn-secondary flex items-center gap-2 text-sm">
-                <Download className="h-4 w-4" /> Excel
-              </button>
+              <ExportButton onClick={() => startExport('sales')} job={exportJob} jobId={exportJobId} label="Excel Ventas" />
               <button onClick={() => downloadSalesPDF(salesData, dateFrom, dateTo)} className="btn-primary flex items-center gap-2 text-sm">
                 <FileText className="h-4 w-4" /> PDF
               </button>
@@ -338,9 +373,7 @@ export default function Reports() {
           )}
           {tab === 'inventory' && invData && (
             <>
-              <button onClick={() => downloadExcel('/api/reports/export/inventory', 'reporte-inventario.xlsx')} className="btn-secondary flex items-center gap-2 text-sm">
-                <Download className="h-4 w-4" /> Excel
-              </button>
+              <ExportButton onClick={() => startExport('inventory')} job={exportJob} jobId={exportJobId} label="Excel Inventario" />
               <button onClick={() => downloadInventoryPDF(invData)} className="btn-primary flex items-center gap-2 text-sm">
                 <FileText className="h-4 w-4" /> PDF
               </button>
