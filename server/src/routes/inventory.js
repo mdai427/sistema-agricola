@@ -1,6 +1,9 @@
 const router = require('express').Router();
 const prisma = require('../lib/prisma');
 const { auth, requireRole } = require('../middleware/auth');
+const cache = require('../lib/cache');
+
+const invalidateStockCaches = () => cache.del('dashboard:main', 'alerts:main');
 
 router.get('/stocks', auth, async (req, res) => {
   try {
@@ -86,6 +89,7 @@ router.post('/movement', auth, async (req, res) => {
       }
       return mov;
     });
+    invalidateStockCaches();
     res.status(201).json(movement);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

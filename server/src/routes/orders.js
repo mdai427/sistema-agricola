@@ -1,6 +1,9 @@
 const router = require('express').Router();
 const prisma = require('../lib/prisma');
 const { auth } = require('../middleware/auth');
+const cache = require('../lib/cache');
+
+const invalidateOrderCaches = () => cache.del('dashboard:main', 'alerts:main');
 
 const generateFolio = async () => {
   const count = await prisma.order.count();
@@ -58,6 +61,7 @@ router.post('/', auth, async (req, res) => {
       });
       return order;
     });
+    invalidateOrderCaches();
     res.status(201).json(order);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -66,6 +70,7 @@ router.patch('/:id/status', auth, async (req, res) => {
   try {
     const { status } = req.body;
     const order = await prisma.order.update({ where: { id: req.params.id }, data: { status }, include: { customer: true } });
+    invalidateOrderCaches();
     res.json(order);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
