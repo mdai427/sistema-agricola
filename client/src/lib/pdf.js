@@ -178,7 +178,7 @@ function drawTotals(doc, y, lines) {
   lines.forEach(([label, value, highlight]) => {
     doc.setFont('helvetica', highlight ? 'bold' : 'normal')
     doc.setFontSize(highlight ? 9.5 : 8.5)
-    doc.setTextColor(highlight ? ...BRAND.dark : ...BRAND.subtext)
+    doc.setTextColor(...(highlight ? BRAND.dark : BRAND.subtext))
     doc.text(label, x + 4, cy)
     doc.setTextColor(...(highlight ? BRAND.mid : BRAND.text))
     doc.text(value, x + boxW - 4, cy, { align: 'right' })
