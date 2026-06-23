@@ -40,6 +40,7 @@ app.use('/api/integrations', require('./routes/integrations'));
 app.use('/api/alerts', require('./routes/alerts'));
 app.use('/api/imports', require('./routes/imports'));
 app.use('/api/jobs', require('./routes/jobs'));
+app.use('/api/config', require('./routes/config'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));
 

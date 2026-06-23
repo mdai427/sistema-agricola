@@ -10,7 +10,18 @@ import { Card, CardContent, CardHeader } from '../components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
-import { Plus, Search, Eye, Trash2, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Search, Eye, Trash2, Loader2, ChevronLeft, ChevronRight, Download } from 'lucide-react'
+import { generateOrderPDF } from '../lib/pdf'
+
+const downloadOrderPDF = async (order) => {
+  try {
+    const [or, cr] = await Promise.all([
+      api.get(`/orders/${order.id}`),
+      api.get('/config/company').catch(() => ({ data: null }))
+    ])
+    await generateOrderPDF(or.data, cr.data)
+  } catch { /* silently fail */ }
+}
 
 const STATUS_LABELS = { NUEVO:'Nuevo', CONFIRMADO:'Confirmado', EN_PREPARACION:'En Preparación', ENVIADO:'Enviado', ENTREGADO:'Entregado', CANCELADO:'Cancelado', DEVOLUCION:'Devolución' }
 const STATUS_VARIANTS = { NUEVO:'secondary', CONFIRMADO:'default', EN_PREPARACION:'warning', ENVIADO:'default', ENTREGADO:'success', CANCELADO:'destructive', DEVOLUCION:'destructive' }
@@ -251,7 +262,12 @@ export default function Orders() {
                   ))}
                 </TableBody>
               </Table>
-              <div className="text-right text-xl font-bold">Total: <span className="text-verde-700">{formatMXN(viewOrder.total)}</span></div>
+              <div className="flex items-center justify-between pt-2 border-t">
+                <Button variant="outline" size="sm" onClick={() => downloadOrderPDF(viewOrder)} className="gap-2">
+                  <Download className="h-4 w-4" /> PDF Nota de Venta
+                </Button>
+                <div className="text-xl font-bold">Total: <span className="text-verde-700">{formatMXN(viewOrder.total)}</span></div>
+              </div>
             </div>
           </DialogContent>
         </Dialog>

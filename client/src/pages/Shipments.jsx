@@ -10,7 +10,13 @@ import { Card, CardContent, CardHeader } from '../components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
-import { Truck, Search, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Truck, Search, Loader2, ChevronLeft, ChevronRight, Download } from 'lucide-react'
+import { generateDeliveryPDF } from '../lib/pdf'
+
+const dlDeliveryPDF = async (shipment) => {
+  const cr = await api.get('/config/company').catch(() => ({ data: null }))
+  await generateDeliveryPDF(shipment, cr.data)
+}
 
 const STATUS_LABELS = { PENDIENTE: 'Pendiente', EN_RUTA: 'En Ruta', ENTREGADO: 'Entregado', FALLIDO: 'Fallido' }
 const STATUS_VARIANTS = { PENDIENTE: 'warning', EN_RUTA: 'default', ENTREGADO: 'success', FALLIDO: 'destructive' }
@@ -117,6 +123,11 @@ export default function Shipments() {
                 <div className="col-span-2"><span className="text-muted-foreground">Dirección:</span> <span>{viewShipment.address || '-'}</span></div>
                 {viewShipment.trackingNumber && <div className="col-span-2"><span className="text-muted-foreground">Guía:</span> <span className="font-mono">{viewShipment.trackingNumber}</span></div>}
                 {viewShipment.notes && <div className="col-span-2"><span className="text-muted-foreground">Notas:</span> <span>{viewShipment.notes}</span></div>}
+              </div>
+              <div className="pt-2 border-t">
+                <Button variant="outline" size="sm" onClick={() => dlDeliveryPDF(viewShipment)} className="gap-2">
+                  <Download className="h-4 w-4" /> Nota de Entrega PDF
+                </Button>
               </div>
             </div>
           </DialogContent>

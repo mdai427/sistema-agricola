@@ -3,6 +3,7 @@ import api from '../lib/api'
 import { useToastStore } from '../store/toastStore'
 import { Plus, Search, FileText, CheckCircle, XCircle, Send, ShoppingCart, Trash2, X, Eye, Download } from 'lucide-react'
 import { cn } from '../lib/utils'
+import { generateQuotePDF } from '../lib/pdf'
 
 const STATUS_CONFIG = {
   BORRADOR: { label: 'Borrador', color: 'bg-gray-100 text-gray-700' },
@@ -148,13 +149,14 @@ export default function Quotes() {
     } catch (err) { addToast(err.response?.data?.error || 'Error', 'error') }
   }
 
-  const downloadPDF = async (id, folio) => {
+  const downloadPDF = async (quote) => {
     try {
-      const r = await api.get(`/quotes/${id}/pdf`, { responseType: 'blob' })
-      const url = URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }))
-      const a = document.createElement('a'); a.href = url; a.download = `cotizacion-${folio}.pdf`; a.click()
-      URL.revokeObjectURL(url)
-    } catch { addToast('Error al generar PDF', 'error') }
+      const [qr, cr] = await Promise.all([
+        api.get(`/quotes/${quote.id}`),
+        api.get('/config/company').catch(() => ({ data: null }))
+      ])
+      await generateQuotePDF(qr.data, cr.data)
+    } catch (e) { addToast('Error al generar PDF', 'error') }
   }
 
   const openView = async (q) => {
@@ -240,7 +242,7 @@ export default function Quotes() {
                     <button onClick={() => openView(q)} title="Ver" className="p-1 rounded hover:bg-gray-100">
                       <Eye className="h-4 w-4 text-gray-500" />
                     </button>
-                    <button onClick={() => downloadPDF(q.id, q.folio)} title="Descargar PDF" className="p-1 rounded hover:bg-gray-100">
+                    <button onClick={() => downloadPDF(q)} title="Descargar PDF" className="p-1 rounded hover:bg-gray-100">
                       <Download className="h-4 w-4 text-gray-500" />
                     </button>
                     {q.status === 'BORRADOR' && (
@@ -480,7 +482,7 @@ export default function Quotes() {
 
               {/* Actions */}
               <div className="flex flex-wrap gap-2 pt-2 border-t">
-                <button onClick={() => downloadPDF(viewQuote.id, viewQuote.folio)} className="btn-secondary flex items-center gap-1 text-sm">
+                <button onClick={() => downloadPDF(viewQuote)} className="btn-secondary flex items-center gap-1 text-sm">
                   <Download className="h-4 w-4" /> PDF
                 </button>
                 {viewQuote.status === 'BORRADOR' && (

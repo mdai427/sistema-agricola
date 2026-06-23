@@ -10,7 +10,13 @@ import { Card, CardContent, CardHeader } from '../components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
-import { Plus, Search, Eye, Trash2, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Search, Eye, Trash2, Loader2, ChevronLeft, ChevronRight, Download } from 'lucide-react'
+import { generatePurchasePDF } from '../lib/pdf'
+
+const dlPurchasePDF = async (purchase) => {
+  const cr = await api.get('/config/company').catch(() => ({ data: null }))
+  await generatePurchasePDF(purchase, cr.data)
+}
 
 const STATUS_LABELS = { PENDIENTE: 'Pendiente', PARCIAL: 'Parcial', RECIBIDA: 'Recibida', CANCELADA: 'Cancelada' }
 const STATUS_VARIANTS = { PENDIENTE: 'warning', PARCIAL: 'default', RECIBIDA: 'success', CANCELADA: 'destructive' }
@@ -210,7 +216,12 @@ export default function Purchases() {
                   ))}
                 </TableBody>
               </Table>
-              <div className="text-right text-xl font-bold">Total: <span className="text-verde-700">{formatMXN(viewPurchase.total)}</span></div>
+              <div className="flex items-center justify-between pt-2 border-t">
+                <Button variant="outline" size="sm" onClick={() => dlPurchasePDF(viewPurchase)} className="gap-2">
+                  <Download className="h-4 w-4" /> OC en PDF
+                </Button>
+                <div className="text-xl font-bold">Total: <span className="text-verde-700">{formatMXN(viewPurchase.total)}</span></div>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
